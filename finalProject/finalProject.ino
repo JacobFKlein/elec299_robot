@@ -9,9 +9,9 @@
 #define RIGHT_WHEEL_SPEED 6
 #define RIGHT_WHEEL_DIRECTION 7
 
-#define IRL A5
-#define IRC A4
-#define IRR A3
+#define LeftLightSensor A5
+#define CenterLightSensor A4
+#define RightLightSensor A3
 #define LTHRESH 280
 #define CTHRESH 280
 #define RTHRESH 280
@@ -34,6 +34,7 @@ void loop() {
   //BTin = GetBT();
   delay(2500);
   SPIN(90, 'L');
+  FollowLine();
   switch (BTin) {
     case '1': // go to left one spin, left 90
       SPIN(90, 'L');
@@ -60,13 +61,14 @@ void Initialize() {
   pinMode(RIGHT_WHEEL_DIRECTION, INPUT);
   pinMode(LEFT_BUMPER, INPUT);
   pinMode(RIGHT_BUMPER, INPUT);
-  pinMode(IRL, OUTPUT);
-  pinMode(IRC, OUTPUT);
-  pinMode(IRR, OUTPUT);
+  pinMode(LeftLightSensor, OUTPUT);
+  pinMode(CenterLightSensor, OUTPUT);
+  pinMode(RightLightSensor, OUTPUT);
   
   /* Initializing Servos (so they dont shake) */
   tilt.attach(TILT);
-  tilt.write(48);
+  // tilt.write(48); FOR GRABBALL
+  tilt.write(150);
   pan.attach(PAN);
   pan.write(90);
   grab.attach(GRIP);
@@ -113,18 +115,19 @@ void FollowLine() { /* Follows line until hits wall */
   while (digitalRead(LEFT_BUMPER) == LOW || digitalRead(RIGHT_BUMPER) == LOW) {
     digitalWrite(LEFT_WHEEL_DIRECTION, HIGH);
     digitalWrite(RIGHT_WHEEL_DIRECTION, HIGH);
-    while (CenterSensor < CTHRESH) {
+    while (CenterLightSensor < CTHRESH) {
       analogWrite(LEFT_WHEEL_SPEED, left_speed); /* 1-255 over 200 fairly unstable */
       analogWrite(RIGHT_WHEEL_SPEED, right_speed);
     }
-    if (LeftSensor < LTHRESH) {
+    if (LeftLightSensor < LTHRESH) {
       analogWrite(LEFT_WHEEL_SPEED, left_speed-10); /* 1-255 over 200 fairly unstable */
       analogWrite(RIGHT_WHEEL_SPEED, right_speed+10);
     }
-      if (RightSensor < RTHRESH) {
-        analogWrite(LEFT_WHEEL_SPEED, left_speed+10); /* 1-255 over 200 fairly unstable */
-        analogWrite(RIGHT_WHEEL_SPEED, right_speed-10);
+    if (RightLightSensor < RTHRESH) {
+      analogWrite(LEFT_WHEEL_SPEED, left_speed+10); /* 1-255 over 200 fairly unstable */
+      analogWrite(RIGHT_WHEEL_SPEED, right_speed-10);
     }
   }
 }
+
 
