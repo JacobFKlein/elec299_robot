@@ -12,9 +12,9 @@
 #define LeftLightSensor A5
 #define CenterLightSensor A4
 #define RightLightSensor A3
-#define LTHRESH 280
-#define CTHRESH 280
-#define RTHRESH 280
+#define LTHRESH 750
+#define CTHRESH 750
+#define RTHRESH 750
 
 #define LEFT_BUMPER 11
 #define RIGHT_BUMPER 13
@@ -27,14 +27,16 @@ char BTin;
 void setup() {
   Initialize();
   WaitBumper();
-  Serial.begin(115200);
+ // Serial.begin(115200);
 }
 
 void loop() {
   //BTin = GetBT();
+  Initialize();
   delay(2500);
   SPIN(90, 'L');
   FollowLine();
+  PickupBall();
   switch (BTin) {
     case '1': // go to left one spin, left 90
       SPIN(90, 'L');
@@ -55,35 +57,30 @@ void loop() {
 
 void Initialize() {
   /* Declaring inputs and outputs */
-  pinMode(LEFT_WHEEL_SPEED, INPUT);
-  pinMode(LEFT_WHEEL_DIRECTION, INPUT);
-  pinMode(RIGHT_WHEEL_SPEED, INPUT);
-  pinMode(RIGHT_WHEEL_DIRECTION, INPUT);
+  pinMode(LEFT_WHEEL_SPEED, OUTPUT);
+  pinMode(LEFT_WHEEL_DIRECTION, OUTPUT);
+  pinMode(RIGHT_WHEEL_SPEED, OUTPUT);
+  pinMode(RIGHT_WHEEL_DIRECTION, OUTPUT);
   pinMode(LEFT_BUMPER, INPUT);
   pinMode(RIGHT_BUMPER, INPUT);
-  pinMode(LeftLightSensor, OUTPUT);
-  pinMode(CenterLightSensor, OUTPUT);
-  pinMode(RightLightSensor, OUTPUT);
+  
+  pinMode(LeftLightSensor, INPUT);
+  pinMode(CenterLightSensor, INPUT);
+  pinMode(RightLightSensor, INPUT);
   
   /* Initializing Servos (so they dont shake) */
   tilt.attach(TILT);
   // tilt.write(48); FOR GRABBALL
-  tilt.write(150);
+  tilt.write(120);
   pan.attach(PAN);
   pan.write(90);
   grab.attach(GRIP);
   grab.write(80);
-  delay(1000);
-  tilt.detach();
-  pan.detach();
-  grab.detach();
-}
+ }
 
 void WaitBumper() {
   while (digitalRead(LEFT_BUMPER) == LOW &&
     digitalRead(RIGHT_BUMPER) == LOW) {}
-  while (digitalRead(LEFT_BUMPER) == HIGH &&
-    digitalRead(RIGHT_BUMPER) == HIGH) {}
   delay(250);
 }
 
@@ -115,19 +112,42 @@ void FollowLine() { /* Follows line until hits wall */
   while (digitalRead(LEFT_BUMPER) == LOW || digitalRead(RIGHT_BUMPER) == LOW) {
     digitalWrite(LEFT_WHEEL_DIRECTION, HIGH);
     digitalWrite(RIGHT_WHEEL_DIRECTION, HIGH);
-    while (CenterLightSensor < CTHRESH) {
+    if (digitalRead(CenterLightSensor) < CTHRESH) {
       analogWrite(LEFT_WHEEL_SPEED, left_speed); /* 1-255 over 200 fairly unstable */
       analogWrite(RIGHT_WHEEL_SPEED, right_speed);
+      delay(50);
     }
-    if (LeftLightSensor < LTHRESH) {
-      analogWrite(LEFT_WHEEL_SPEED, left_speed-10); /* 1-255 over 200 fairly unstable */
-      analogWrite(RIGHT_WHEEL_SPEED, right_speed+10);
+    else if (digitalRead(LeftLightSensor) < LTHRESH) {
+      analogWrite(LEFT_WHEEL_SPEED, left_speed-80); /* 1-255 over 200 fairly unstable */
+      analogWrite(RIGHT_WHEEL_SPEED, right_speed+80);
+      delay(50);
     }
-    if (RightLightSensor < RTHRESH) {
-      analogWrite(LEFT_WHEEL_SPEED, left_speed+10); /* 1-255 over 200 fairly unstable */
-      analogWrite(RIGHT_WHEEL_SPEED, right_speed-10);
+    else if (digitalRead(RightLightSensor) < RTHRESH) {
+      analogWrite(LEFT_WHEEL_SPEED, left_speed+80); /* 1-255 over 200 fairly unstable */
+      analogWrite(RIGHT_WHEEL_SPEED, right_speed-80);
+      delay(50);
     }
   }
 }
 
+void Backup(int timeMsec) {
+  digitalWrite(LEFT_WHEEL_DIRECTION, LOW);
+  digitalWrite(RIGHT_WHEEL_DIRECTION, LOW);
+  analogWrite(LEFT_WHEEL_SPEED, left_speed);
+  analogWrite(RIGHT_WHEEL_SPEED, right_speed);
+  delay(timeMsec);
+  analogWrite(LEFT_WHEEL_SPEED, 0);
+  analogWrite(RIGHT_WHEEL_SPEED, 0);
+  
+}
+
+void PickupBall() {
+  Backup(165);
+  tilt.write(40);
+  pan.write(90);
+  delay(400);
+  grab.write(110);
+  delay(450);
+  Backup(1000);
+}
 
