@@ -1,4 +1,5 @@
 #include <Servo.h>
+#include <QSerial.h>
 
 //servo pins and variables
 #define TILT 9
@@ -17,9 +18,9 @@ Servo tilt, pan, grab;
 #define LeftLightSensor A5
 #define CenterLightSensor A4
 #define RightLightSensor A3
-#define LTHRESH 750
-#define CTHRESH 750
-#define RTHRESH 750
+#define LTHRESH 500
+#define CTHRESH 500
+#define RTHRESH 500 // was 650 for all 
 
 //bumper pins
 #define LEFT_BUMPER 11
@@ -31,7 +32,8 @@ byte right_speed = 114;
 
 //global bluetooth input variable
 char BTin;
-
+char BTin2;
+char Target;
 /* current position variable
   values(Left,Center,Right,Front,Back) */
 String position = "Center";
@@ -39,19 +41,23 @@ String position = "Center";
   values(Left,Center, Right,Front,Back) */
 String nextPosition;
 
+QSerial myIRserial;
 void setup() {
   Initialize();
+  Serial.begin(115200);
   WaitBumper();
- // Serial.begin(115200);
 }
 
 void loop() {
   //BTin = GetBT();
-  Initialize();
-  delay(2500);
-  SPIN(90, 'L');
+  //Initialize();
+  delay(500);
+  Target = getNextTarget();
+  //SPIN(90, 'L');
   FollowLine();
   PickupBall();
+  DepositBall();
+  /*
   switch (BTin) {
     case '1': // go to left one spin, left 90
       SPIN(90, 'L');
@@ -68,11 +74,15 @@ void loop() {
     default: //otherwise do...
       break;
   }
+  */
 }
 
 //used to initialize all pins and servos in the robot
 void Initialize() {
   /* Declaring inputs and outputs */
+  pinMode(LeftLightSensor, INPUT);
+  pinMode(CenterLightSensor, INPUT);
+  pinMode(RightLightSensor, INPUT);
   pinMode(LEFT_WHEEL_SPEED, OUTPUT);
   pinMode(LEFT_WHEEL_DIRECTION, OUTPUT);
   pinMode(RIGHT_WHEEL_SPEED, OUTPUT);
@@ -82,6 +92,8 @@ void Initialize() {
   pinMode(LeftLightSensor, INPUT);
   pinMode(CenterLightSensor, INPUT);
   pinMode(RightLightSensor, INPUT);
+
+  myIRserial.attach(A0, -1); //-1 in second column means recieve
   
   /* Initializing Servos (so they dont shake) */
   tilt.attach(TILT);
@@ -95,11 +107,19 @@ void Initialize() {
 /* this function waits until a bumper is pressed
    (similar to having a pushbutton) */
 void WaitBumper() {
-  while (digitalRead(LEFT_BUMPER) == LOW &&
+/*  while (digitalRead(LEFT_BUMPER) == LOW &&
     digitalRead(RIGHT_BUMPER) == LOW) {}
-  delay(250);
-}
+  delay(250);*/
 
+  while (true) {
+    if (Serial.available()) {
+      BTin2 = Serial.read();
+      if (BTin2 == '1' || BTin2 == '0' || BTin2 == '2') {
+        break;
+      }
+    }
+  }
+}
 //gets a character response from the BT module
 char GetBT() {
   BTin = ' ';
@@ -119,33 +139,40 @@ void SPIN(int degree, char direction) {
     digitalWrite(LEFT_WHEEL_DIRECTION, HIGH);
     digitalWrite(RIGHT_WHEEL_DIRECTION, LOW);
   }
-  analogWrite(LEFT_WHEEL_SPEED, left_speed); /* 1-255 over 200 fairly unstable */
-  analogWrite(RIGHT_WHEEL_SPEED, right_speed);
-  delay(degree*9.78);
+
+  analogWrite(LEFT_WHEEL_SPEED, .8*left_speed); /* 1-255 over 200 fairly unstable */
+  analogWrite(RIGHT_WHEEL_SPEED, .8*right_speed);
+  delay(600);
+  
+  while (analogRead(LeftLightSensor) >= LTHRESH  || analogRead(RightLightSensor) >= RTHRESH 
+      || analogRead(CenterLightSensor) >= CTHRESH) {}    
+
+  if (degree > 90) {
+    SPIN(degree-90, direction);
+  }
+  else {
   analogWrite(LEFT_WHEEL_SPEED,0); /* 1-255 over 200 fairly unstable */
   analogWrite(RIGHT_WHEEL_SPEED,0);
+  }
 }
 
 /* using light sensors allows the robot to follow a
    black line until it hits a wall */
 void FollowLine() { /* Follows line until hits wall */
-  while (digitalRead(LEFT_BUMPER) == LOW || digitalRead(RIGHT_BUMPER) == LOW) {
+  while (digitalRead(LEFT_BUMPER) == LOW && digitalRead(RIGHT_BUMPER) == LOW) {
     digitalWrite(LEFT_WHEEL_DIRECTION, HIGH);
     digitalWrite(RIGHT_WHEEL_DIRECTION, HIGH);
     if (analogRead(CenterLightSensor) < CTHRESH) {
       analogWrite(LEFT_WHEEL_SPEED, left_speed); /* 1-255 over 200 fairly unstable */
       analogWrite(RIGHT_WHEEL_SPEED, right_speed);
-      delay(50);
     }
-    else if (analogRead(LeftLightSensor) < LTHRESH) {
+    if (analogRead(LeftLightSensor) < LTHRESH) {
       analogWrite(LEFT_WHEEL_SPEED, left_speed-30); /* 1-255 over 200 fairly unstable */
       analogWrite(RIGHT_WHEEL_SPEED, right_speed+30);
-      delay(50);
     }
-    else if (analogRead(RightLightSensor) < RTHRESH) {
+    if (analogRead(RightLightSensor) < RTHRESH) {
       analogWrite(LEFT_WHEEL_SPEED, left_speed+30); /* 1-255 over 200 fairly unstable */
       analogWrite(RIGHT_WHEEL_SPEED, right_speed-30);
-      delay(50);
     }
   }
 }
@@ -169,27 +196,146 @@ void PickupBall() {
   pan.write(90);
   delay(400);
   grab.write(110);
-  delay(450);
+  delay(250);
+  tilt.write(120);
+  delay(250);
   Backup(1000);
 }
 
 //INCOMPLETE
 /* allows the robot to recieve the location of the next ball
    through either Infrared or Bluetooth */
-void getNextLocation() {
-	while (true) {
-	//turn 45
-	//search ir
-	//if get a 1/2/3 from ir
-		//finish 360 turn
-		//set nextlocation to 1/2/3
-		//break;
-	//search BT
-	//if get a 1/2/3 from BT
-		//finish 360 turn
-		//set nextlocation to 1/2/3
-		//break;
-	}
+char getNextTarget() {
+  int spins = 0;
+  char temp = ' ';
+  while (true) {
+    for (int i = 0; i < 15; i++) {
+      temp = getIRBTSignal();
+      if (temp == '0' || temp == '1' || temp == '2') {
+        delay(400);
+        break;
+      }
+     if (BTin2 != -1) {
+        temp = BTin2;
+        BTin2 = -1;
+        delay(400);
+        break;
+      }
+    }
+    if (temp == '1') {
+      while (spins%4!=0) {
+        SPIN(90, 'L');
+        delay(350);
+        spins++;
+      }
+      return '1';
+      break;
+    }
+    else if (temp == '2') {
+      while (spins%4 !=1) {
+        SPIN(90, 'L');
+        spins++;
+        delay(350);
+      }
+      return '2';
+      break;
+    }
+    else if (temp == '0') {
+      while (spins%4!=3) {
+        SPIN(90, 'L');
+        spins++;
+        delay(350);
+      }
+      return '0';
+      break;
+    }
+    else {
+      SPIN(90, 'L');
+      spins++;
+      delay(200);
+    }
+  }
+}
+
+char getIRBTSignal() {
+  //char val = myIRserial.receive(200);
+  //delay(200);
+
+  BTin = ' ';
+  long timer = millis();
+  while (millis() - timer < 200) {
+    if (Serial.available()) {
+      BTin = Serial.read();
+      if (BTin != ' ') {
+        return BTin;
+      }
+    }
+  }
+  return BTin;
+}
+
+void DepositBall() {
+  SPIN(90, 'L');
+  delay(200);
+    if (Target ==  '0') {
+    GoToCenter();
+    SPIN(90, 'L');
+    delay(200);
+  }
+  else if (Target == '1') {
+    SPIN(90, 'L');
+    delay(200);
+  }
+  else if (Target == '2') {
+    GoToCenter();
+    SPIN(90, 'R');
+     delay(200);
+  }
+  FollowLine();
+  Dunk();
+  Backup(1000);
+  SPIN(90, 'L');
+  delay(300);
+  GoToCenter();
+  delay(450);
+  
+}
+
+void GoToCenter() {
+    while (analogRead(LeftLightSensor) >= LTHRESH  || analogRead(RightLightSensor) >= RTHRESH 
+      || analogRead(CenterLightSensor) >= CTHRESH){
+      digitalWrite(LEFT_WHEEL_DIRECTION, HIGH);
+      digitalWrite(RIGHT_WHEEL_DIRECTION, HIGH);
+      if (analogRead(CenterLightSensor) < CTHRESH) {
+        analogWrite(LEFT_WHEEL_SPEED, left_speed); /* 1-255 over 200 fairly unstable */
+        analogWrite(RIGHT_WHEEL_SPEED, right_speed);
+      }
+      if (analogRead(LeftLightSensor) < LTHRESH) {
+        analogWrite(LEFT_WHEEL_SPEED, left_speed-30); /* 1-255 over 200 fairly unstable */
+        analogWrite(RIGHT_WHEEL_SPEED, right_speed+30);
+      }
+      if (analogRead(RightLightSensor) < RTHRESH) {
+        analogWrite(LEFT_WHEEL_SPEED, left_speed+30); /* 1-255 over 200 fairly unstable */
+        analogWrite(RIGHT_WHEEL_SPEED, right_speed-30);
+      }
+  }
+  delay(50);
+}
+
+void Dunk() {
+  tilt.write(100);
+  delay(700);
+  pan.write(90);
+  delay(300);
+  grab.write(100);
+  delay(200);
+  grab.write(90);
+  delay(200);
+  grab.write(80);
+  delay(200);
+
 
 }
+
+
 
